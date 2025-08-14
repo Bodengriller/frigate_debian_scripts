@@ -12,17 +12,18 @@
 # - Supports non-root access configuration 
 # - Provides options to rebuild, reinstall, or uninstall the PCIe driver
 #
-# Usage: sudo ./install_coral_tpu.sh [--install|--reinstall|--rebuild|--uninstall|--status|--setup-non-root USER]
+# Usage: ./install_coral_tpu.sh [--install|--reinstall|--rebuild|--uninstall|--status|--setup-non-root USER|--setup-unprivileged]
 
 set -e
 
 KEYRING="/etc/apt/keyrings/coral-edgetpu.gpg"
 SOURCES="/etc/apt/sources.list.d/coral-edgetpu.list"
 UDEV_RULE="/etc/udev/rules.d/65-apex.rules"
+UDEV_RULE2="/etc/udev/rules.d/99-chmod777.rules"
 
 # Function to display usage
 display_usage() {
-    echo "Usage: sudo bash $0 [OPTION]"
+    echo "Usage: bash $0 [OPTION]"
     echo "Options:"
     echo "  --status        : Display installation status."
     echo "  --install       : Install the TPU driver and library."
@@ -30,6 +31,7 @@ display_usage() {
     echo "  --reinstall     : Reinstall the TPU driver from source."
     echo "  --rebuild       : Rebuild the TPU driver for the current kernel."
     echo "  --setup-non-root [username] : Set up non-root access for the specified user."
+	echo "  --setup-unprivileged        : Set up chmod777 for unprivileged LXC containers"
 }
 
 # Function to prompt for reboot
@@ -111,6 +113,13 @@ status() {
       echo "Apex group for non-root access: not present."
   fi
 
+  # Udev rule and group for unprivileged LXC access
+  if [ -f "$UDEV_RULE2" ]; then
+      echo "Udev rule for for unprivileged LXC access: present."
+  else
+      echo "Udev rule for for unprivileged LXC access: not present."
+  fi
+
   if [ "$status_failed" = true ]; then
       echo -e "Driver installation validation failed. \n"
       display_usage
@@ -119,22 +128,22 @@ status() {
 
 install() {
   if [ "$EUID" -ne 0 ]; then
-    echo "Please run as root (sudo $0 install)"
+    echo "Please run as root ($0 install)"
     exit 1
   fi
 
   # Check if gasket-dkms is installed and /dev/apex_0 exists
   if dpkg -l | grep -q gasket-dkms && [ -e /dev/apex_0 ]; then
     echo "Driver already installed and functional. Verify with: ls /dev/apex_0"
-    echo "To reinstall: sudo $0 reinstall"
-    echo "To rebuild for current kernel: sudo $0 rebuild"
+    echo "To reinstall: $0 reinstall"
+    echo "To rebuild for current kernel: $0 rebuild"
     exit 0
   fi
 
   # Install build prerequisites
   echo "Installing prerequisites..."
   apt update || { echo "Error: Failed to run apt update"; exit 1; }
-  apt install -y curl gpg dkms build-essential devscripts linux-headers-$(uname -r) || \
+  apt install -y git devscripts dh-dkms dkms proxmox-headers-$(uname -r) || \
     { echo "Error: Failed to install prerequisites"; exit 1; }
 
   install_libedgetpu
@@ -194,7 +203,7 @@ install_driver() {
 
 uninstall() {
   if [ "$EUID" -ne 0 ]; then
-    echo "Please run as root (sudo $0 uninstall)"
+    echo "Please run as root ($0 uninstall)"
     exit 1
   fi
 
@@ -202,7 +211,7 @@ uninstall() {
   apt remove --purge -y gasket-dkms libedgetpu1-std || true
 
   # Clean up files
-  rm -f "$SOURCES" "$KEYRING" "$UDEV_RULE"
+  rm -f "$SOURCES" "$KEYRING" "$UDEV_RULE" "$UDEV_RULE2"
   rm -rf /usr/src/gasket-*  
 
   # Remove group
@@ -217,7 +226,7 @@ uninstall() {
 
 reinstall() {
   if [ "$EUID" -ne 0 ]; then
-    echo "Please run as root (sudo $0 reinstall)"
+    echo "Please run as root ($0 reinstall)"
     exit 1
   fi
 
@@ -232,13 +241,13 @@ reinstall() {
 
 rebuild() {
   if [ "$EUID" -ne 0 ]; then
-    echo "Please run as root (sudo $0 rebuild)"
+    echo "Please run as root ($0 rebuild)"
     exit 1
   fi
 
   # Ensure kernel headers
-  apt install -y linux-headers-$(uname -r) || {
-    echo "Error: Failed to install linux-headers-$(uname -r)"
+  apt install -y proxmox-headers-$(uname -r) || {
+    echo "Error: Failed to install proxmox-headers-$(uname -r)"
     exit 1
   }
 
@@ -311,6 +320,24 @@ setup_non_root_access() {
   echo "Non-root access set for $username"
 }
 
+setup-unprivileged() {
+  if [ "$EUID" -ne 0 ]; then
+    echo "Please run as root ($0 rebuild)"
+    exit 1
+  fi
+  
+  # Set up udev rule to use the TPU in a unprivileged LXC
+  echo 'SUBSYSTEM=="apex", MODE="0777", GROUP="apex"' > "$UDEV_RULE2" || \
+    { echo "Error: Failed to create udev rule for apex"; return 1; }
+  echo 'KERNEL=="renderD128", MODE="0777"' > "$UDEV_RULE2" || \
+    { echo "Error: Failed to create udev rule for renderD128"; return 1; }
+
+  udevadm control --reload-rules && udevadm trigger || \
+    { echo "Error: Failed to reload udev rules"; return 1; }
+
+  echo "chmod777 set for /dev/apex_0 and /dev/dri/renderD128"
+}
+
 case "$1" in
   --install)
     install
@@ -326,14 +353,17 @@ case "$1" in
     ;;
   --setup-non-root)
     if [ "$EUID" -ne 0 ]; then
-      echo "Please run as root (sudo $0 setup-non-root [username])"
+      echo "Please run as root ($0 setup-non-root [username])"
       exit 1
     fi
     setup_non_root_access "${2:-$SUDO_USER}"
     ;;
+  --setup-unprivileged)
+    setup-unprivileged
+    ;;
   --status)
     status
-    ;;    
+    ;;
   *)
     display_usage
     ;;
