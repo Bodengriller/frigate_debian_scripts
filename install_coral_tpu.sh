@@ -112,12 +112,14 @@ status() {
   else
       echo "Apex group for non-root access: not present."
   fi
+  
+  echo -e "\nUnprivileged LXC access:"
 
-  # Udev rule and group for unprivileged LXC access
+  # Udev rule for unprivileged LXC access
   if [ -f "$UDEV_RULE2" ]; then
-      echo "Udev rule for for unprivileged LXC access: present."
+      echo "Udev rule for unprivileged LXC access: present."
   else
-      echo "Udev rule for for unprivileged LXC access: not present."
+      echo "Udev rule for unprivileged LXC access: not present."
   fi
 
   if [ "$status_failed" = true ]; then
