@@ -145,7 +145,7 @@ install() {
   # Install build prerequisites
   echo "Installing prerequisites..."
   apt update || { echo "Error: Failed to run apt update"; exit 1; }
-  apt install -y git devscripts dh-dkms dkms proxmox-headers-$(uname -r) || \
+  apt install -y git devscripts dh-dkms dkms pve-headers proxmox-headers-$(uname -r) || \
     { echo "Error: Failed to install prerequisites"; exit 1; }
 
   install_libedgetpu
@@ -248,8 +248,8 @@ rebuild() {
   fi
 
   # Ensure kernel headers
-  apt install -y proxmox-headers-$(uname -r) || {
-    echo "Error: Failed to install proxmox-headers-$(uname -r)"
+  apt install -y pve-headers proxmox-headers-$(uname -r) || {
+    echo "Error: Failed to install pve-headers and proxmox-headers-$(uname -r)"
     exit 1
   }
 
