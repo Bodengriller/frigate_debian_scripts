@@ -4,7 +4,7 @@
 ### 1. Installing prerequisites...
 ```
 apt update && apt upgrade -y
-apt install -y git devscripts dh-dkms dkms proxmox-headers-$(uname -r)
+apt install -y git devscripts dh-dkms dkms pve-headers proxmox-headers-$(uname -r)
 ```
 
 ### 2. Adding Coral Edge TPU repository...
@@ -18,9 +18,9 @@ apt install -y libedgetpu1-std
 ### 3. Installing driver from source...
 Download Git-repo and switch to PullRequest #50 [https://github.com/google/gasket-driver/pull/50]
 ```
-mkdir -p /home/coral-build
-git clone https://github.com/google/gasket-driver.git /home/coral-build/gasket-driver
-cd /home/coral-build/gasket-driver
+mkdir -p /tmp/coral-build
+git clone https://github.com/google/gasket-driver.git /tmp/coral-build/gasket-driver
+cd /tmp/coral-build/gasket-driver
 git fetch origin pull/50/head:pr-50
 git checkout pr-50
 debuild -us -uc -tc -b
@@ -50,7 +50,7 @@ udevadm control --reload-rules && udevadm trigger
 ## Reinstall the TPU driver after kernel-update ###
 ```
 apt remove --purge -y gasket-dkms
-cd /home/coral-build/gasket-driver
+cd /tmp/coral-build/gasket-driver
 debuild -us -uc -tc -b
 dpkg -i ../gasket-dkms_*_all.deb
 apt update
